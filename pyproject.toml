@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools >= 69.1.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+requires-python = ">= 3.12"
+name = "bah"
+description = "bah"
+version = "1.0.0"
+authors = [
+  {name = "Maxime Deslauriers", email = "maxime.deslauriers.1@ulaval.ca"},
+]
+maintainers = [
+  {name = "Maxime Deslauriers", email = "maxime.deslauriers.1@ulaval.ca"},
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+
+[project.scripts]
+bah = "bah.main:main"
