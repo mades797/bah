@@ -10,9 +10,18 @@ import terminalio
 from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.polygon import Polygon
 
+from bah.exceptions import BAHException
+
 
 PIXEL_FILL = 0xFFFFFF
 PIXEL_NO_FILL = 0x0
+BAT_UNKNOWN_TEXT = '???'
+
+
+class DisplayControllerException(BAHException):
+    """
+    DisplayController exception
+    """
 
 
 class DisplayController:
@@ -38,17 +47,31 @@ class DisplayController:
     bat_tip_end_y = 8
     bat_tip_length = 2
 
-    def __init__(self):
-        displayio.release_displays()
-        i2c = board.I2C()
-        display_bus = I2CDisplayBus(i2c, device_address=0x3C)
-        display = adafruit_displayio_ssd1306.SSD1306(display_bus, width=self.display_width, height=self.display_height)
-        self._splash = displayio.Group()
-        display.root_group = self._splash
-        self.button_press_counter = 0
-        self.write_top_banner(f'!!Bonjour!!')
+    # Singleton
+    _instance = None
 
-    def erase_top_banner(self):
+    def __new__(cls) -> 'DisplayController':
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        try:
+            displayio.release_displays()
+            i2c = board.I2C()
+            display_bus = I2CDisplayBus(i2c, device_address=0x3C)
+            display = adafruit_displayio_ssd1306.SSD1306(
+                display_bus,
+                width=self.display_width,
+                height=self.display_height
+            )
+            self._splash = displayio.Group()
+            display.root_group = self._splash
+            self.write_top_banner('!!Bonjour!!')
+        except Exception as error:
+            raise DisplayControllerException('Failed to initialize display controller') from error
+
+    def erase_top_banner(self) -> None:
         """
         Erase the top banner
 
@@ -56,7 +79,7 @@ class DisplayController:
         """
         self._erase(self.display_width, self.top_banner_height)
 
-    def erase_all(self):
+    def erase_all(self) -> None:
         """
         Erase the top banner
 
@@ -64,21 +87,41 @@ class DisplayController:
         """
         self._erase(self.display_width, self.display_height)
 
-    def _erase(self, width, height, x_offset=0, y_offset=0):
+    def _erase(self, width: int, height: int, x_offset: int = 0, y_offset: int = 0) -> None:
         inner_bitmap = displayio.Bitmap(width, height, 1)
         inner_palette = displayio.Palette(1)
         inner_palette[0] = PIXEL_NO_FILL
         inner_sprite = displayio.TileGrid(inner_bitmap, pixel_shader=inner_palette, x=x_offset, y=y_offset)
         self._splash.append(inner_sprite)
 
-    def erase_main(self):
+    def erase_main(self) -> None:
+        """
+        Erase the main screen
+
+        :return:
+        """
         self._erase(self.display_width, self.main_window_height, y_offset=self.main_window_top - 3)
 
-    def erase_top_banner_message(self):
+    def erase_top_banner_message(self) -> None:
+        """
+        Erase the top banner message
+
+        :return:
+        """
         self._erase(self.top_message_end_x, self.top_banner_height)
 
-    def draw_battery(self, charge):
-        self._erase(self.display_width - self.bat_main_rect_start_x, self.top_banner_height, x_offset=self.bat_main_rect_start_x)
+    def draw_battery(self, charge: int) -> None:
+        """
+        Draw the battery charge symbol with the corresponding charge
+
+        :param charge:
+        :return:
+        """
+        self._erase(
+            self.display_width - self.bat_main_rect_start_x,
+            self.top_banner_height,
+            x_offset=self.bat_main_rect_start_x
+        )
         outer_outline = Polygon([
             (self.bat_main_rect_start_x, self.bat_main_rect_start_y),
             (self.bat_main_rect_end_x, self.bat_main_rect_start_y),
@@ -115,7 +158,27 @@ class DisplayController:
                 )
                 self._splash.append(tip_fill)
 
-    def write_top_banner(self, message):
+    def draw_battery_unknown(self) -> None:
+        """
+        Draw the battery symbol with unknown charge
+
+        :return:
+        """
+        self._erase(
+            self.display_width - self.bat_main_rect_start_x,
+            self.top_banner_height,
+            x_offset=self.bat_main_rect_start_x
+        )
+        text_area = label.Label(
+            terminalio.FONT,
+            text=BAT_UNKNOWN_TEXT,
+            color=PIXEL_FILL,
+            x=self.bat_main_rect_start_x,
+            y=3
+        )
+        self._splash.append(text_area)
+
+    def write_top_banner(self, message: str) -> None:
         """
         Write a message on the top banner
 
@@ -126,7 +189,13 @@ class DisplayController:
         text_area = label.Label(terminalio.FONT, text=message, color=PIXEL_FILL, x=2, y=3)
         self._splash.append(text_area)
 
-    def write_main(self, message):
+    def write_main(self, message: str) -> None:
+        """
+        Write message on the main screen
+
+        :param message:
+        :return:
+        """
         self.erase_main()
         text_area = label.Label(terminalio.FONT, text=message, color=PIXEL_FILL, x=2, y=self.main_window_top)
         self._splash.append(text_area)

@@ -18,3 +18,20 @@ license = {file = "LICENSE"}
 
 [project.scripts]
 bah = "bah.main:main"
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = 3.12
+
+[testenv]
+deps =
+  pytest==7.4.4
+  adafruit-circuitpython-displayio-ssd1306==3.0.6
+  adafruit-circuitpython-display-text==5.0.4
+  adafruit-circuitpython-display-shapes==2.10.6
+  coverage==7.14.0
+commands =
+  coverage run --branch --source=bah -m pytest tests/tests.py
+  coverage report -m
+"""
