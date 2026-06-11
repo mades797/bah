@@ -10,6 +10,7 @@ from bah.battery_manager import BatteryManager
 from bah.display_controller import DisplayController
 from bah.audio_controller import AudioController
 from bah.exceptions import BAHException
+from bah.network_sync import NetworkSync
 
 
 def main() -> None:
@@ -19,7 +20,6 @@ def main() -> None:
     :return:
     """
     try:
-        logging.basicConfig(level=logging.DEBUG)
         logging.info('Starting BAH')
         button_1 = Button(27)
         button_2 = Button(22)
@@ -27,9 +27,11 @@ def main() -> None:
         button_4 = Button(19)
         logging.basicConfig(level=logging.INFO)
         display_controller = DisplayController()
+        audio_controller = AudioController(display_controller)
+        network_sync = NetworkSync(display_controller, audio_controller)
+        network_sync.run_async()
         battery_manager = BatteryManager(display_controller)
         battery_manager.run_async()
-        audio_controller = AudioController(display_controller)
 
         button_1.when_pressed = audio_controller.handle_next_button
         button_2.when_pressed = audio_controller.handle_back_button

@@ -31,6 +31,9 @@ class Task:
         self._on_exception: Optional[Callable] = kwargs.pop('on_exception', None)
         self._name = name
 
+    def __str__(self) -> str:
+        return self._name
+
     def is_due(self) -> bool:
         """
         Check if this task is due to be executed
@@ -84,10 +87,12 @@ class TaskScheduler(ABC):
 
         :return:
         """
-        for task in self.tasks:
-            if task.is_due():
-                task.start()
-        time.sleep(0.1)
+        while True:
+            for task in self.tasks:
+                logging.debug('Checking task: %s', str(task))
+                if task.is_due():
+                    task.start()
+            time.sleep(0.1)
 
     def run_async(self) -> None:
         """
