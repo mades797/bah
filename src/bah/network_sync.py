@@ -102,6 +102,8 @@ class NetworkSync(TaskScheduler):
             with open(self.remote_data_file, 'r', encoding='utf-8') as file:
                 # TODO: Check that file is valid
                 self.handle_remote_media_list(json.loads(file.read()))
+        # except FileNotFoundError as error:
+        #     raise BAHException('Failed to read media file') from error
         except OSError as error:
             if (
                 error.errno == 2 and

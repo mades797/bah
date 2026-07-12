@@ -2,6 +2,7 @@
 Task scheduler module
 """
 from abc import ABC, abstractmethod
+# from concurrent.futures import ThreadPoolExecutor
 import datetime
 import logging
 import threading
@@ -9,6 +10,9 @@ import time
 from typing import Any, Callable, Optional
 
 from bah.exceptions import BAHException
+
+logger = logging.getLogger('bah-task-scheduler')
+logger.setLevel(logging.INFO)
 
 
 class Task:
@@ -53,6 +57,7 @@ class Task:
         self._last_run = datetime.datetime.now()
         try:
             result = self._call()
+            logging.info('Task result: %s', result)
             if self._callback:
                 self._callback(result)
         except BAHException as error:
@@ -71,6 +76,16 @@ class TaskScheduler(ABC):
 
     def __init__(self) -> None:
         self._background_thread: threading.Thread = threading.Thread(target=self.run)
+        self._initialized = False
+
+    @property
+    def initialized(self) -> bool:
+        """
+        Flag to indicate if task scheduler is initialized
+
+        :return:
+        """
+        return self._initialized
 
     @property
     @abstractmethod
@@ -92,6 +107,7 @@ class TaskScheduler(ABC):
                 logging.debug('Checking task: %s', str(task))
                 if task.is_due():
                     task.start()
+            self._initialized = True
             time.sleep(0.1)
 
     def run_async(self) -> None:

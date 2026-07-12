@@ -1,4 +1,4 @@
-# pylint: disable=W0212 (protected-access), R0904 (too-many-public-methods)
+# pylint: disable=W0212 (protected-access), R0904 (too-many-public-methods), R0903 (too-few-public-methods)
 """
 Tests module
 """
@@ -10,6 +10,7 @@ import terminalio
 import pytest
 
 from bah.display_controller import DisplayController, DisplayControllerException
+from bah.network_sync import NetworkSync
 # from bah.battery_manager import BatteryManager
 from bah.audio_controller import AudioController, AudioControllerState, Media
 
@@ -31,6 +32,50 @@ def fixture_audio_controller() -> AudioController:
         return controller
 
 
+@pytest.fixture(name='fake_data')
+def fixture_fake_data() -> dict:
+    """
+    Fixture to create a fake data dict for testing
+
+    :return:
+    """
+    return {
+        'media': [
+            {
+                'title': 'title-1',
+                'filename': 'filename-1',
+            },
+            {
+                'title': 'title-2',
+                'filename': 'filename-2',
+            },
+            {
+                'title': 'title-3',
+                'filename': 'filename-3',
+            },
+            {
+                'title': 'title-4',
+                'filename': 'filename-4',
+            },
+            {
+                'title': 'title-5',
+                'filename': 'filename-5',
+            }
+        ]
+    }
+
+
+@pytest.fixture(scope='function', autouse=True)
+def remove_singleton():
+    """
+    Remove the singleton so that the object is re-created
+
+    :return:
+    """
+    DisplayController._instance = None
+    yield
+
+
 @pytest.fixture(name='display_controller')
 def fixture_display_controller() -> DisplayController:
     """
@@ -40,11 +85,25 @@ def fixture_display_controller() -> DisplayController:
     """
     with (
         mock.patch('bah.display_controller.displayio'),
-        mock.patch('bah.display_controller.board'),
         mock.patch('bah.display_controller.I2CDisplayBus'),
         mock.patch('bah.display_controller.adafruit_displayio_ssd1306'),
     ):
         return DisplayController()
+
+
+@pytest.fixture(name='network_sync')
+def fixture_network_sync() -> NetworkSync:
+    """
+    Fixture to create a NetworkSync instance with the network and file interface mocked
+
+    :return: DisplayController instance
+    """
+    with (
+        mock.patch('bah.display_controller.displayio'),
+        mock.patch('bah.display_controller.I2CDisplayBus'),
+        mock.patch('bah.display_controller.adafruit_displayio_ssd1306'),
+    ):
+        return NetworkSync(mock.MagicMock(), mock.MagicMock())
 
 
 class TestAudioController:
@@ -93,8 +152,8 @@ class TestAudioController:
         assert not audio_controller.is_playing
 
     @staticmethod
-    @mock.patch.object(AudioController, '_display_volume')
-    def test_transition_to_playing(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_display_current_media')
+    def test_transition_to_playing(mock_display_current_media, audio_controller):
         """
         Test the `_transition_to_playing` method
 
@@ -103,39 +162,15 @@ class TestAudioController:
         audio_controller._current_state = AudioControllerState.IDLE
         audio_controller._transition_to_playing()
         assert audio_controller._current_state == AudioControllerState.PLAYING
-        mock_display_volume.assert_called_once()
+        mock_display_current_media.assert_called_once()
 
     @staticmethod
-    def test_read_media_list(audio_controller):
+    def test_read_media_list(audio_controller, fake_data):
         """
         Test the `_read_media_list` method
 
         Expected result: The mocked media list is read and assigned
         """
-        fake_data = {
-            'media': [
-                {
-                    'title': 'title-1',
-                    'filename': 'filename-1',
-                },
-                {
-                    'title': 'title-2',
-                    'filename': 'filename-2',
-                },
-                {
-                    'title': 'title-3',
-                    'filename': 'filename-3',
-                },
-                {
-                    'title': 'title-4',
-                    'filename': 'filename-4',
-                },
-                {
-                    'title': 'title-5',
-                    'filename': 'filename-5',
-                }
-            ]
-        }
         with mock.patch('builtins.open', mock.mock_open(read_data=json.dumps(fake_data))):
             audio_controller._read_media_list()
         assert audio_controller.media_list[0].title == 'title-1'
@@ -229,165 +264,177 @@ class TestAudioController:
         assert audio_controller._current_media_index == 9
 
     @staticmethod
-    @mock.patch.object(AudioController, '_transition_to_playing')
+    @mock.patch.object(AudioController, '_transition_to_idle')
     @mock.patch.object(AudioController, '_increment_media_index')
-    @mock.patch.object(AudioController, '_play_current_index')
-    def test_handle_next_button_idle(
-            mock_play_current_index,
+    @mock.patch.object(AudioController, 'play_pause')
+    def test_play_next_idle(
+            mock_play_pause,
             mock_increment_media_index,
-            mock_transition_to_playing,
+            mock_transition_to_idle,
             audio_controller
     ):
         """
-        Test the `handle_next_button` function when the controller is idle
+        Test the `play_next` function when the controller is idle
 
         Expected result: Transition to playing is executed and current media is played
         """
         audio_controller._current_state = AudioControllerState.IDLE
-        audio_controller.handle_next_button()
-        mock_transition_to_playing.assert_called_once()
+        audio_controller.play_next()
+        mock_transition_to_idle.assert_called_once()
         mock_increment_media_index.assert_not_called()
-        mock_play_current_index.assert_called_once()
+        mock_play_pause.assert_called_once()
 
     @staticmethod
-    @mock.patch.object(AudioController, '_transition_to_playing')
+    @mock.patch.object(AudioController, '_transition_to_idle')
     @mock.patch.object(AudioController, '_increment_media_index')
-    @mock.patch.object(AudioController, '_play_current_index')
-    def test_handle_next_button_playing(
-            mock_play_current_index,
+    @mock.patch.object(AudioController, 'play_pause')
+    def test_play_next_playing(
+            mock_play_pause,
             mock_increment_media_index,
-            mock_transition_to_playing,
+            mock_transition_to_idle,
             audio_controller
     ):
         """
-        Test the `handle_next_button` method when media is playing
+        Test the `play_next` method when media is playing
 
         Expected result: The media index is incremented, and the new current media is played.
         """
         audio_controller._current_state = AudioControllerState.PLAYING
-        audio_controller.handle_next_button()
+        audio_controller.play_next()
         mock_increment_media_index.assert_called_once()
-        mock_transition_to_playing.assert_not_called()
-        mock_play_current_index.assert_called_once()
+        mock_transition_to_idle.assert_called_once()
+        mock_play_pause.assert_called_once()
 
     @staticmethod
-    @mock.patch.object(AudioController, '_transition_to_playing')
+    @mock.patch.object(AudioController, '_transition_to_idle')
     @mock.patch.object(AudioController, '_decrement_media_index')
-    @mock.patch.object(AudioController, '_play_current_index')
-    def test_handle_back_button_idle(
-            mock_play_current_index,
+    @mock.patch.object(AudioController, 'play_pause')
+    def test_play_previous_idle(
+            mock_play_pause,
             mock_decrement_media_index,
-            mock_transition_to_playing,
+            mock_transition_to_idle,
             audio_controller
     ):
         """
-        Test the `handle_back_button` function when the controller is idle
+        Test the `play_previous` function when the controller is idle
 
-        Expected result: Transition to playing is executed and current media is played
+        Expected result: The media index is decremented and the media is played
         """
         audio_controller._current_state = AudioControllerState.IDLE
-        audio_controller.handle_back_button()
-        mock_transition_to_playing.assert_called_once()
-        mock_decrement_media_index.assert_not_called()
-        mock_play_current_index.assert_called_once()
+        audio_controller.play_previous()
+        mock_transition_to_idle.assert_called_once()
+        mock_decrement_media_index.assert_called_once()
+        mock_play_pause.assert_called_once()
 
     @staticmethod
-    @mock.patch.object(AudioController, '_transition_to_playing')
+    @mock.patch.object(AudioController, '_transition_to_idle')
     @mock.patch.object(AudioController, '_decrement_media_index')
-    @mock.patch.object(AudioController, '_play_current_index')
-    def test_handle_back_button_playing(
-            mock_play_current_index,
+    @mock.patch.object(AudioController, 'play_pause')
+    def test_play_previous_playing(
+            mock_play_pause,
             mock_decrement_media_index,
-            mock_transition_to_playing,
+            mock_transition_to_idle,
             audio_controller
     ):
         """
-        Test the `handle_back_button` when media is playing
+        Test the `play_previous` when media is playing
 
-        Expected result: The media index is incremented and the current media is played
+        Expected result: The media index is decremented and the current media is played
         """
         audio_controller._current_state = AudioControllerState.PLAYING
-        audio_controller.handle_back_button()
+        audio_controller.play_previous()
         mock_decrement_media_index.assert_called_once()
-        mock_transition_to_playing.assert_not_called()
-        mock_play_current_index.assert_called_once()
+        mock_transition_to_idle.assert_called_once()
+        mock_play_pause.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_down_button(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_down(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_down_button` function when the volume does not reach the minimum
+        Test the `volume_down` function when the volume does not reach the minimum
 
         Expected result: The volume is decremented and volume is displayed
         """
-        audio_controller._current_volume = 40
-        audio_controller.handle_down_button()
-        assert audio_controller._current_volume == 30
+        mock_current_volume.return_value = 4
+        audio_controller._volume_down()
+        mock__set_volume.assert_called_once_with(3)
         mock_display_volume.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_down_button_min(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_down_min(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_down_button` function when the volume reaches the minimum
+        Test the `volume_down` function when the volume reaches the minimum
 
         Expected result: The volume is set to zero and volume is displayed
         """
-        audio_controller._current_volume = 5
-        audio_controller.handle_down_button()
-        assert audio_controller._current_volume == 0
+        mock_current_volume.return_value = 1
+        audio_controller._volume_down()
+        mock__set_volume.assert_called_once_with(0)
         mock_display_volume.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_down_button_min2(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_down_min2(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_down_button` function when the volume is already at minimum
+        Test the `volume_down` function when the volume is already at minimum
 
-        Expected result: The volume is set to zero and volume is displayed
+        Expected result: The volume is not set and volume is displayed
         """
-        audio_controller._current_volume = 0
-        audio_controller.handle_down_button()
-        assert audio_controller._current_volume == 0
+        mock_current_volume.return_value = 0
+        audio_controller._volume_down()
+        mock__set_volume.assert_not_called()
         mock_display_volume.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_up_button(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_up(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_up_button` function when the volume does not reach the maximum
+        Test the `volume_up` function when the volume does not reach the maximum
 
         Expected result: The volume is incremented and volume is displayed
         """
-        audio_controller._current_volume = 60
-        audio_controller.handle_up_button()
-        assert audio_controller._current_volume == 70
+        mock_current_volume.return_value = 6
+        audio_controller._volume_up()
+        mock__set_volume.assert_called_once_with(7)
         mock_display_volume.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_up_button_max(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_up_max(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_up_button` function when the volume reaches the maximum
+        Test the `volume_up` function when the volume reaches the maximum
 
         Expected result: The volume is set to maximum and volume is displayed
         """
-        audio_controller._current_volume = 95
-        audio_controller.handle_up_button()
-        assert audio_controller._current_volume == 100
+        mock_current_volume.return_value = 9
+        audio_controller._volume_up()
+        mock__set_volume.assert_called_once_with(10)
         mock_display_volume.assert_called_once()
 
     @staticmethod
+    @mock.patch.object(AudioController, 'current_volume', new_callable=mock.PropertyMock)
     @mock.patch.object(AudioController, '_display_volume')
-    def test_handle_up_button_max2(mock_display_volume, audio_controller):
+    @mock.patch.object(AudioController, '_set_volume')
+    def test_volume_up_max2(mock__set_volume, mock_display_volume, mock_current_volume, audio_controller):
         """
-        Test the `handle_up_button` function when the volume is already at maximum
+        Test the `volume_up` function when the volume is already at maximum
 
-        Expected result: The volume is set to maximum and volume is displayed
+        Expected result: The volume is not set and volume is displayed
         """
-        audio_controller._current_volume = 100
-        audio_controller.handle_up_button()
-        assert audio_controller._current_volume == 100
+        mock_current_volume.return_value = 10
+        audio_controller._volume_up()
+        mock__set_volume.assert_not_called()
         mock_display_volume.assert_called_once()
 
     @staticmethod
@@ -483,8 +530,8 @@ class TestDisplayController:
 
         Expected result: The download_flash thread is not joined
         """
-        display_controller._download_flash_thread = None
         display_controller._download_flash_stop = mock.MagicMock()
+        display_controller._download_flash_thread = None
         display_controller.stop_download_flash()
         display_controller._download_flash_stop.assert_not_called()
 
@@ -495,8 +542,8 @@ class TestDisplayController:
 
         Expected result: The download_flash thread is not joined
         """
-        display_controller._download_flash_stop = None
         display_controller._download_flash_thread = mock.MagicMock()
+        display_controller._download_flash_stop = None
         display_controller.stop_download_flash()
         display_controller._download_flash_thread.assert_not_called()
 
@@ -625,7 +672,8 @@ class TestDisplayController:
         Expected result: The battery symbol is drawn with the right battery fill
         """
         display_controller._splash.reset_mock()
-        display_controller.draw_battery(28)
+        display_controller.battery_charge = 28
+        display_controller.draw_battery()
         mock_erase_battery.assert_called_once()
         mock_polygon.assert_called_once_with([
             (108, 2),
@@ -654,7 +702,8 @@ class TestDisplayController:
         Expected result: The battery symbol is drawn with the right battery fill
         """
         display_controller._splash.reset_mock()
-        display_controller.draw_battery(78)
+        display_controller.battery_charge = 78
+        display_controller.draw_battery()
         mock_erase_battery.assert_called_once()
         mock_polygon.assert_called_once_with([
             (108, 2),
@@ -683,7 +732,8 @@ class TestDisplayController:
         Expected result: The battery symbol is drawn with the right battery fill and the battery tip
         """
         display_controller._splash.reset_mock()
-        display_controller.draw_battery(98)
+        display_controller.battery_charge = 98
+        display_controller.draw_battery()
         mock_erase_battery.assert_called_once()
         mock_polygon.assert_called_once_with([
             (108, 2),
@@ -716,7 +766,8 @@ class TestDisplayController:
         """
         # TODO
         display_controller._splash.reset_mock()
-        display_controller.draw_battery(1)
+        display_controller.battery_charge = 1
+        display_controller.draw_battery()
 
     @staticmethod
     @mock.patch('bah.display_controller.DisplayController.erase_battery')
@@ -732,3 +783,140 @@ class TestDisplayController:
         mock_erase_battery.assert_called_once()
         mock_label.Label.assert_called_once_with(terminalio.FONT, text='???', color=0xFFFFFF, x=108, y=4)
         display_controller._splash.append.assert_called_once_with(mock_label.Label.return_value)
+
+    @staticmethod
+    def test_is_battery_flashing_false(display_controller) -> None:
+        """
+        Test the `is_battery_flashing` method when the battery indicator is not flashing
+
+        Expected result: The method returns False
+        """
+        display_controller._battery_flash_thread = mock.MagicMock()
+        display_controller._battery_flash_thread.is_alive.return_value = False
+        assert not display_controller.is_battery_flashing()
+
+    @staticmethod
+    def test_is_battery_flashing_true(display_controller) -> None:
+        """
+        Test the `is_battery_flashing` method when the battery indicator is flashing
+
+        Expected result: The method returns True
+        """
+        display_controller._battery_flash_thread = mock.MagicMock()
+        display_controller._battery_flash_thread.is_alive.return_value = True
+        assert display_controller.is_battery_flashing()
+
+    @staticmethod
+    def test_set_battery_charging_2_charging(display_controller) -> None:
+        """
+        Test the `set_battery_charging` method when the battery is not charging and transitions to charging
+
+        Expected result: The battery indicator should start flashing
+        """
+        with (mock.patch('bah.display_controller.DisplayController.start_battery_flash') as mock_start_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.stop_battery_flash') as mock_stop_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.is_battery_flashing', return_value=False)):
+            display_controller.set_battery_charging(True)
+            mock_start_battery_flash.assert_called_once()
+            mock_stop_battery_flash.assert_not_called()
+
+    @staticmethod
+    def test_set_battery_charging_2_not_charging(display_controller) -> None:
+        """
+        Test the `set_battery_charging` method when the battery is charging and transitions to not charging
+
+        Expected result: The battery indicator should stop flashing
+        """
+        with (mock.patch('bah.display_controller.DisplayController.start_battery_flash') as mock_start_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.stop_battery_flash') as mock_stop_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.is_battery_flashing', return_value=True)):
+            display_controller.set_battery_charging(False)
+            mock_start_battery_flash.assert_not_called()
+            mock_stop_battery_flash.assert_called_once()
+
+    @staticmethod
+    def test_set_battery_charging_already_charging(display_controller) -> None:
+        """
+        Test the `set_battery_charging` method when the battery is set to charging but was already flashing
+
+        Expected result: Nothing is done
+        """
+        with (mock.patch('bah.display_controller.DisplayController.start_battery_flash') as mock_start_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.stop_battery_flash') as mock_stop_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.is_battery_flashing', return_value=True)):
+            display_controller.set_battery_charging(True)
+            mock_start_battery_flash.assert_not_called()
+            mock_stop_battery_flash.assert_not_called()
+
+    @staticmethod
+    def test_set_battery_charging_already_not_charging(display_controller) -> None:
+        """
+        Test the `set_battery_charging` method when the battery is set to not charging but was already not flashing
+
+        Expected result: Nothing is done
+        """
+        with (mock.patch('bah.display_controller.DisplayController.start_battery_flash') as mock_start_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.stop_battery_flash') as mock_stop_battery_flash,
+              mock.patch('bah.display_controller.DisplayController.is_battery_flashing', return_value=False)):
+            display_controller.set_battery_charging(False)
+            mock_start_battery_flash.assert_not_called()
+            mock_stop_battery_flash.assert_not_called()
+
+    @staticmethod
+    @mock.patch('bah.display_controller.DisplayController.draw_battery')
+    @mock.patch('bah.display_controller.DisplayController.erase_battery')
+    def test_battery_flash(mock_draw_battery, mock_erase_battery, display_controller) -> None:
+        """
+        Test the battery flashing
+
+        Expected result: The `draw_battery` and `erase_battery` methods are called to produce
+        the flashing
+        """
+        display_controller.start_battery_flash()
+        time.sleep(2)
+        display_controller.stop_battery_flash()
+        mock_draw_battery.assert_called()
+        mock_erase_battery.assert_called()
+        assert not display_controller._battery_flash_thread.is_alive()
+
+    @staticmethod
+    def test_battery_flash_stop_redundant(display_controller) -> None:
+        """
+        This test validates a redundant call to `stop_battery_flash` as the object's thread is None
+
+        Expected result: The _battery_flash_thread thread is not joined
+        """
+        display_controller._battery_flash_stop = mock.MagicMock()
+        display_controller._battery_flash_thread = None
+        display_controller.stop_battery_flash()
+        display_controller._battery_flash_stop.assert_not_called()
+
+    @staticmethod
+    def test_battery_flash_stop_redundant_2(display_controller) -> None:
+        """
+        This test validates a redundant call to `stop_battery_flash` as the object's stop event is None
+
+        Expected result: The _battery_flash_thread thread is not joined
+        """
+        display_controller._battery_flash_thread = mock.MagicMock()
+        display_controller._battery_flash_stop = None
+        display_controller.stop_battery_flash()
+        display_controller._battery_flash_thread.assert_not_called()
+
+
+class TestNetworkSync:
+    """
+    Test class for the NetworkSync class
+    """
+
+    @staticmethod
+    @mock.patch.object(NetworkSync, 'handle_remote_media_list')
+    def test_read_remote_media(mock_handle_remote_media_list, network_sync, fake_data) -> None:
+        """
+        Test the `read_remote_media` method
+
+        Expected result: The `handle_remote_media_list` is called with the parsed data
+        """
+        with mock.patch('builtins.open', mock.mock_open(read_data=json.dumps(fake_data))):
+            network_sync.read_remote_media()
+            mock_handle_remote_media_list.assert_called_once_with(fake_data)

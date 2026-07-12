@@ -11,8 +11,10 @@ repos:
         additional_dependencies:
           - adafruit-circuitpython-display-text
           - adafruit-circuitpython-displayio-ssd1306
+          - adafruit-extended-bus==1.0.2
           - pylint-pytest==1.1.8
           - pytest==7.4.4
+          - python-vlc==3.0.20123
         args: ['-v']
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.0

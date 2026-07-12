@@ -1,0 +1,11 @@
+adafruit-circuitpython-display-shapes==2.10.6
+adafruit-circuitpython-display-text==5.0.4
+adafruit-circuitpython-displayio-ssd1306==3.0.6
+adafruit_extended_bus==1.0.2
+gpiozero==2.0.1
+coverage==7.14.0
+flake8==7.3.0
+flake8-quotes==3.4.0
+pylint==4.0.5
+pylint-pytest==1.1.8
+pytest==7.4.4

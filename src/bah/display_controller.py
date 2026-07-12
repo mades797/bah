@@ -1,12 +1,14 @@
 """
 DisplayController module
 """
+import logging
 import threading
 import time
+import os
+from typing import Callable
 
 import adafruit_displayio_ssd1306
 from adafruit_display_text import label
-import board
 import displayio
 from i2cdisplaybus import I2CDisplayBus
 import terminalio
@@ -14,13 +16,18 @@ from adafruit_display_shapes.line import Line
 from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.polygon import Polygon
 from adafruit_display_shapes.filled_polygon import FilledPolygon
+from adafruit_extended_bus import ExtendedI2C
 
 from bah.exceptions import BAHException
+
+logger = logging.getLogger('bah-display-controller')
+logger.setLevel(logging.INFO)
 
 
 PIXEL_FILL = 0xFFFFFF
 PIXEL_NO_FILL = 0x0
 BAT_UNKNOWN_TEXT = '???'
+I2C_BUS = os.environ.get('BAH_DISPLAY_I2C_BUS', 3)
 
 
 class DisplayControllerException(BAHException):
@@ -29,10 +36,12 @@ class DisplayControllerException(BAHException):
     """
 
 
+# pylint: disable=R0904 (too-many-public-methods)
 class DisplayController:
     """
     Class implementing the display controller interface.
     """
+    _welcome_message = 'Initialization...'
 
     display_width = 128
     display_height = 64
@@ -73,6 +82,9 @@ class DisplayController:
     # Singleton
     _instance = None
 
+    # comm
+    i2c_bus = I2C_BUS
+
     def __new__(cls) -> 'DisplayController':
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -81,7 +93,7 @@ class DisplayController:
     def __init__(self) -> None:
         try:
             displayio.release_displays()
-            i2c = board.I2C()
+            i2c = ExtendedI2C(self.i2c_bus)
             display_bus = I2CDisplayBus(i2c, device_address=0x3C)
             display = adafruit_displayio_ssd1306.SSD1306(
                 display_bus,
@@ -90,19 +102,61 @@ class DisplayController:
             )
             self._splash = displayio.Group()
             display.root_group = self._splash
+            self.write_top_banner(self._welcome_message)
             self._download_flash_thread: threading.Thread | None = None
+            self._battery_flash_thread: threading.Thread | None = None
             self._download_flash_stop: threading.Event | None = None
-            self.write_top_banner('!!Bonjour!!')
+            self._battery_flash_stop: threading.Event | None = None
+            self._battery_charge = 0
         except Exception as error:
             raise DisplayControllerException('Failed to initialize display controller') from error
 
-    def _download_flash(self, stop_event: threading.Event) -> None:
+    @property
+    def battery_charge(self) -> int:
+        """
+        Battery charge percentage
+
+        :return:
+        """
+        return self.battery_charge
+
+    @battery_charge.setter
+    def battery_charge(self, value: int) -> None:
+        self._battery_charge = value
+
+    @staticmethod
+    def _flash(
+            stop_event: threading.Event,
+            draw_method: Callable,
+            erase_method: Callable,
+            sleep_time: float = 0.5
+    ) -> None:
         while not stop_event.is_set():
-            self.draw_download_indicator()
-            time.sleep(0.5)
-            self.erase_download_indicator()
-            time.sleep(0.5)
-        self.erase_download_indicator()
+            draw_method()
+            time.sleep(sleep_time)
+            erase_method()
+            time.sleep(sleep_time)
+        erase_method()
+
+    def is_battery_flashing(self) -> bool:
+        """
+        Determine if the battery indicator is currently flashing
+
+        :return: True if flashing, else False
+        """
+        return self._battery_flash_thread is not None and self._battery_flash_thread.is_alive()
+
+    def set_battery_charging(self, charging: bool) -> None:
+        """
+        Start or stop the battery charging.
+
+        :param charging: Flag to indicate if the battery is charging.
+        :return:
+        """
+        if charging and not self.is_battery_flashing():
+            self.start_battery_flash()
+        elif not charging and self.is_battery_flashing():
+            self.stop_battery_flash()
 
     def start_download_flash(self) -> None:
         """
@@ -111,8 +165,26 @@ class DisplayController:
         :return:
         """
         self._download_flash_stop = threading.Event()
-        self._download_flash_thread = threading.Thread(target=self._download_flash, args=(self._download_flash_stop,))
+        self._download_flash_thread = threading.Thread(
+            target=self._flash,
+            args=(self._download_flash_stop, self.draw_download_indicator, self.erase_download_indicator)
+        )
+        logger.info('Starting download flash thread')
         self._download_flash_thread.start()
+
+    def start_battery_flash(self) -> None:
+        """
+        Start the flashing of the battery indicator
+
+        :return:
+        """
+        self._battery_flash_stop = threading.Event()
+        self._battery_flash_thread = threading.Thread(
+            target=self._flash,
+            args=(self._battery_flash_stop, self.draw_battery, self.erase_battery)
+        )
+        logger.info('Starting battery flash thread')
+        self._battery_flash_thread.start()
 
     def stop_download_flash(self) -> None:
         """
@@ -123,6 +195,16 @@ class DisplayController:
         if self._download_flash_thread is not None and self._download_flash_stop is not None:
             self._download_flash_stop.set()
             self._download_flash_thread.join()
+
+    def stop_battery_flash(self) -> None:
+        """
+        Stop the flashing of the "downloading" indicator
+
+        :return:
+        """
+        if self._battery_flash_thread is not None and self._battery_flash_stop is not None:
+            self._battery_flash_stop.set()
+            self._battery_flash_thread.join()
 
     def erase_top_banner(self) -> None:
         """
@@ -284,11 +366,10 @@ class DisplayController:
         )
         self._splash.append(shape)
 
-    def draw_battery(self, charge: int) -> None:
+    def draw_battery(self) -> None:
         """
         Draw the battery charge symbol with the corresponding charge
 
-        :param charge:
         :return:
         """
         self.erase_battery()
@@ -304,9 +385,9 @@ class DisplayController:
         ], outline=PIXEL_FILL, colors=1)
         self._splash.append(outer_outline)
         fill_width = round(
-            int((charge / 100) * (self.bat_main_rect_end_x - self.bat_main_rect_start_x)) / 4
+            int((self._battery_charge / 100) * (self.bat_main_rect_end_x - self.bat_main_rect_start_x)) / 4
         ) * 4
-        if charge > 5:
+        if self._battery_charge > 5:
             battery_fill = Rect(
                 x=self.bat_main_rect_start_x,
                 y=self.bat_main_rect_start_y,
@@ -316,7 +397,7 @@ class DisplayController:
                 outline=PIXEL_FILL
             )
             self._splash.append(battery_fill)
-            if charge >= 95:
+            if self._battery_charge >= 95:
                 tip_fill = Rect(
                     x=self.bat_main_rect_end_x - 2,
                     y=self.bat_tip_start_y,
