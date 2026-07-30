@@ -27,6 +27,7 @@ class EventType(Enum):
     LEFT_BUTTON = 3
     UP_BUTTON = 4
     DOWN_BUTTON = 5
+    EXIT = 6
 
 
 class AudioControllerException(BAHException):
@@ -207,7 +208,7 @@ class AudioController:
         """
         while True:
             try:
-                action: EventType = self.event_queue.get(timeout=1)
+                action: EventType = self.event_queue.get(timeout=0.5)
                 logger.debug('Action from queue: %s', action)
                 match action:
                     case EventType.PLAY_PAUSE_BUTTON:
@@ -222,6 +223,8 @@ class AudioController:
                         self._volume_down()
                     case EventType.UP_BUTTON:
                         self._volume_up()
+                    case EventType.EXIT:
+                        break
                     case _:
                         logger.error('Unknown action: %s', action)
             except queue.Empty:

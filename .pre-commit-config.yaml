@@ -11,6 +11,7 @@ repos:
         additional_dependencies:
           - adafruit-circuitpython-display-text
           - adafruit-circuitpython-displayio-ssd1306
+          - adafruit-circuitpython-display-shapes==2.10.6
           - adafruit-extended-bus==1.0.2
           - pylint-pytest==1.1.8
           - pytest==7.4.4

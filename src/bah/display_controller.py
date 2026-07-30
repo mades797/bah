@@ -118,7 +118,7 @@ class DisplayController:
 
         :return:
         """
-        return self.battery_charge
+        return self._battery_charge
 
     @battery_charge.setter
     def battery_charge(self, value: int) -> None:
@@ -384,10 +384,16 @@ class DisplayController:
             (self.bat_main_rect_start_x, self.bat_main_rect_end_y),
         ], outline=PIXEL_FILL, colors=1)
         self._splash.append(outer_outline)
-        fill_width = round(
-            int((self._battery_charge / 100) * (self.bat_main_rect_end_x - self.bat_main_rect_start_x)) / 4
-        ) * 4
-        if self._battery_charge > 5:
+        fill_width = 0
+        if 30 > self.battery_charge >= 15:
+            fill_width = 4
+        elif 50 > self.battery_charge >= 30:
+            fill_width = 8
+        elif 75 > self.battery_charge >= 50:
+            fill_width = 12
+        elif self.battery_charge >= 75:
+            fill_width = 16
+        if fill_width:
             battery_fill = Rect(
                 x=self.bat_main_rect_start_x,
                 y=self.bat_main_rect_start_y,
@@ -397,16 +403,16 @@ class DisplayController:
                 outline=PIXEL_FILL
             )
             self._splash.append(battery_fill)
-            if self._battery_charge >= 95:
-                tip_fill = Rect(
-                    x=self.bat_main_rect_end_x - 2,
-                    y=self.bat_tip_start_y,
-                    height=self.bat_tip_end_y - self.bat_tip_start_y,
-                    width=self.bat_tip_length + 2,
-                    fill=PIXEL_FILL,
-                    outline=PIXEL_FILL
-                )
-                self._splash.append(tip_fill)
+        if self.battery_charge >= 95:
+            tip_fill = Rect(
+                x=self.bat_main_rect_end_x - 2,
+                y=self.bat_tip_start_y,
+                height=self.bat_tip_end_y - self.bat_tip_start_y,
+                width=self.bat_tip_length + 2,
+                fill=PIXEL_FILL,
+                outline=PIXEL_FILL
+            )
+            self._splash.append(tip_fill)
 
     def draw_battery_unknown(self) -> None:
         """

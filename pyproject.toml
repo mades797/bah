@@ -34,6 +34,6 @@ deps =
   coverage==7.14.0
   python-vlc==3.0.21203
 commands =
-  coverage run --branch --source=bah -m pytest tests/tests.py
+  coverage run --branch --source=bah -m pytest tests/
   coverage report -m
 """
