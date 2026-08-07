@@ -25,14 +25,14 @@ class BatteryManager(TaskScheduler):
         self._tasks = [
             Task(
                 'get-battery-charge',
-                5,
+                15,
                 self._get_battery_charge,
                 self.set_battery_charge,
                 on_exception=self.set_unknown
             ),
             Task(
                 'get-battery-charging',
-                1,
+                5,
                 self._get_battery_charging,
                 self.set_battery_charging
             )
