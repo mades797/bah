@@ -1,13 +1,16 @@
 """
 BAH audio controller module
 """
+import threading
 from dataclasses import dataclass
 from enum import Enum
 import json
 import logging
 import os
 import queue
+import subprocess
 
+import gpiozero
 import vlc
 
 from bah.display_controller import DisplayController
@@ -15,6 +18,9 @@ from bah.exceptions import BAHException
 
 logger = logging.getLogger('bah-audio-controller')
 logger.setLevel(logging.DEBUG)
+
+ASOUND_CONF_HEADPHONES = 'asound_hp.state'
+ASOUND_CONF_SPEAKER = 'asound_spk.state'
 
 
 class EventType(Enum):
@@ -76,6 +82,7 @@ class AudioController:
         event_manager = self._vlc_player.event_manager()
         event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self.handle_end_of_media)
         self.event_queue: queue.Queue[EventType] = queue.Queue()
+        self._configure_audio_output()
 
     @property
     def current_media(self) -> Media:
@@ -307,6 +314,13 @@ class AudioController:
         self._transition_to_idle()
         self._decrement_media_index()
         self.play_pause()
+
+    def _configure_audio_output(self) -> None:
+        file = ASOUND_CONF_SPEAKER
+
+        subprocess.Popen(
+            ['alsactl', 'restore', '--file', f'/var/lib/alsa/{file}'],
+        )
 
     def handle_up_button(self) -> None:
         """
