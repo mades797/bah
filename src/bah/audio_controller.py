@@ -82,6 +82,21 @@ class AudioController:
         event_manager = self._vlc_player.event_manager()
         event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self.handle_end_of_media)
         self.event_queue: queue.Queue[EventType] = queue.Queue()
+        self._headphone_plug: gpiozero.Button | None = None
+        self._headphones_plugged = False
+        self._headphone_detect_thread: threading.Thread | None = None
+        self._headphone_events_queue: queue.Queue = queue.Queue()
+
+    def register_headphone_button(self, button: gpiozero.Button) -> None:
+        """
+        Register a headphone button to detect if a headphone plug is connected
+
+        :param button:
+        :return:
+        """
+        button.when_pressed = self.handle_headphone_plug
+        button.when_released = self.handle_headphone_plug
+        self._headphone_plug = button
         self._configure_audio_output()
 
     @property
@@ -316,11 +331,36 @@ class AudioController:
         self.play_pause()
 
     def _configure_audio_output(self) -> None:
-        file = ASOUND_CONF_SPEAKER
-
+        if self._headphone_plug is not None and not self._headphone_plug.is_pressed:
+            file = ASOUND_CONF_HEADPHONES
+        else:
+            file = ASOUND_CONF_SPEAKER
+        # pylint: disable=R1732 (consider-using-with)
         subprocess.Popen(
             ['alsactl', 'restore', '--file', f'/var/lib/alsa/{file}'],
         )
+        logger.info('Done running alsactl process. file: %s', file)
+
+    def _headphone_detection(self) -> None:
+        while True:
+            try:
+                self._headphone_events_queue.get(timeout=0.5)
+            except queue.Empty:
+                break
+        self._configure_audio_output()
+        logger.debug('End of _headphone_detection')
+
+    def handle_headphone_plug(self) -> None:
+        """
+        Handle a change in status of the headphone plug. Plugging in or out of the headphone jack creates many
+        events. We will put all events in a queue.
+
+        :return:
+        """
+        if self._headphone_detect_thread is None or not self._headphone_detect_thread.is_alive():
+            self._headphone_detect_thread = threading.Thread(target=self._headphone_detection)
+            self._headphone_detect_thread.start()
+        self._headphone_events_queue.put(None)
 
     def handle_up_button(self) -> None:
         """
