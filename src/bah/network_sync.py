@@ -109,6 +109,10 @@ class NetworkSync(TaskScheduler):
                 error.errno == 2 and
                 error.strerror == 'No such file or directory' and
                 error.filename == self.remote_data_file
+            ) or (
+                error.errno == 19 and
+                error.strerror == 'No such device' and
+                error.filename == self.remote_data_file
             ):
                 logging.warning('Failed to read remote media file: %s. Is the remote drive mounted?', error.filename)
             else:

@@ -27,6 +27,7 @@ def main() -> None:
         button_5 = Button(22)
         button_3 = Button(26)
         button_2 = Button(6)
+        headphone = Button(25, pull_up=True)
         logger.setLevel(logging.INFO)
         display_controller = DisplayController()
         try:
@@ -37,6 +38,7 @@ def main() -> None:
             button_3.when_pressed = audio_controller.handle_back_button
             button_4.when_pressed = audio_controller.handle_up_button
             button_5.when_pressed = audio_controller.handle_down_button
+            audio_controller.register_headphone_button(headphone)
             network_sync = NetworkSync(display_controller, audio_controller)
             network_sync.run_async()
             battery_manager = BatteryManager(display_controller)
