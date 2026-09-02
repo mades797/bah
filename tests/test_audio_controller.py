@@ -9,7 +9,6 @@ from unittest import mock
 
 import pytest
 
-from bah.display_controller import DisplayController
 from bah.audio_controller import AudioController, AudioControllerState, EventType, Media
 
 
@@ -20,23 +19,12 @@ def fixture_audio_controller() -> AudioController:
 
     :return: AudioController instance
     """
-    with (mock.patch('bah.audio_controller.DisplayController'),
+    with (mock.patch('bah.audio_controller.SSD1306'),
           mock.patch('bah.audio_controller.vlc.MediaPlayer'),
           mock.patch('bah.audio_controller.AudioController._read_media_list')):
         controller = AudioController()
         controller.media_list = [Media(title=f'title-{i}', filename=f'filename-{i}') for i in range(10)]
         return controller
-
-
-@pytest.fixture(scope='function', autouse=True)
-def remove_singleton():
-    """
-    Remove the singleton so that the object is re-created
-
-    :return:
-    """
-    DisplayController._instance = None
-    yield
 
 
 class TestAudioController:
@@ -150,7 +138,8 @@ class TestAudioController:
             Media(title='title-2', filename='filename-2')
         ]
         audio_controller._play_current_index()
-        audio_controller._display_controller.write_main.assert_called_with('title-2')
+        audio_controller._display_controller.set_main_text.assert_called_with('title-2')
+        audio_controller._display_controller.update.assert_called_once()
 
     @staticmethod
     def test_increment_media_index(audio_controller):
@@ -370,7 +359,7 @@ class TestAudioController:
         Expected result: TODO
         """
         audio_controller._display_volume()
-        audio_controller._display_controller.write_top_banner.assert_called()
+        audio_controller._display_controller.set_top_text.assert_called()
 
     @staticmethod
     def test_get_media_files(audio_controller):
@@ -401,8 +390,9 @@ class TestAudioController:
         )
         audio_controller._vlc_player.play.assert_called_once()
         assert audio_controller.is_playing
-        audio_controller._display_controller.write_top_banner.assert_called_once_with('Lecture')
-        audio_controller._display_controller.write_main.assert_called_once_with('1: title-0')
+        audio_controller._display_controller.set_top_text.assert_called_once_with('Lecture')
+        audio_controller._display_controller.set_main_text.assert_called_once_with('1: title-0')
+        audio_controller._display_controller.update.assert_called_once()
 
     @staticmethod
     def test_play_pause_while_paused(audio_controller):
@@ -417,8 +407,9 @@ class TestAudioController:
         audio_controller._vlc_player.set_time.assert_called_once_with(8000)
         audio_controller._vlc_player.play.assert_called_once()
         assert audio_controller.is_playing
-        audio_controller._display_controller.write_top_banner.assert_called_once_with('Lecture')
-        audio_controller._display_controller.write_main.assert_called_once_with('1: title-0')
+        audio_controller._display_controller.set_top_text.assert_called_once_with('Lecture')
+        audio_controller._display_controller.set_main_text.assert_called_once_with('1: title-0')
+        audio_controller._display_controller.update.assert_called_once()
 
     @staticmethod
     def test_play_pause_while_playing(audio_controller):
@@ -431,7 +422,8 @@ class TestAudioController:
         audio_controller.play_pause()
         audio_controller._vlc_player.pause.assert_called_once()
         assert audio_controller.is_paused
-        audio_controller._display_controller.write_top_banner.assert_called_once_with('Pause')
+        audio_controller._display_controller.set_top_text.assert_called_once_with('Pause')
+        audio_controller._display_controller.update.assert_called_once()
 
     @staticmethod
     def test_run(audio_controller):

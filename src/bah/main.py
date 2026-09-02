@@ -4,10 +4,10 @@ BAH main module
 import logging
 import time
 
+from display_controller import SSD1306
 from gpiozero import Button
 
 from bah.battery_manager import BatteryManager
-from bah.display_controller import DisplayController
 from bah.audio_controller import AudioController
 from bah.exceptions import BAHException
 from bah.network_sync import NetworkSync
@@ -29,7 +29,9 @@ def main() -> None:
         button_2 = Button(6)
         headphone = Button(25, pull_up=True)
         logger.setLevel(logging.INFO)
-        display_controller = DisplayController()
+        display_controller = SSD1306()
+        display_controller.set_top_text('Initialization...')
+        display_controller.begin()
         try:
             # If a failure occurs beyond this point, we can display an error on the display
             audio_controller = AudioController(display_controller)
@@ -45,11 +47,13 @@ def main() -> None:
             battery_manager.run_async()
             while not network_sync.initialized or not battery_manager.initialized:
                 time.sleep(0.5)
-            display_controller.write_top_banner('Prêt')
+            display_controller.set_top_text('Prêt')
+            display_controller.update()
 
             audio_controller.run()
         except BAHException:
-            display_controller.write_top_banner('Erreur!')
+            display_controller.set_top_text('Erreur!')
+            display_controller.update()
             raise
     except BAHException as error:
         logger.error('Failed to initialize BAH: %s', error)

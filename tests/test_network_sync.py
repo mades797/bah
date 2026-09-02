@@ -17,12 +17,12 @@ def fixture_network_sync() -> NetworkSync:
 
     :return: DisplayController instance
     """
-    with (
-        mock.patch('bah.display_controller.displayio'),
-        mock.patch('bah.display_controller.I2CDisplayBus'),
-        mock.patch('bah.display_controller.adafruit_displayio_ssd1306'),
-    ):
-        return NetworkSync(mock.MagicMock(), mock.MagicMock())
+    # with (
+    #     mock.patch('bah.display_controller.displayio'),
+    #     mock.patch('bah.display_controller.I2CDisplayBus'),
+    #     mock.patch('bah.display_controller.adafruit_displayio_ssd1306'),
+    # ):
+    return NetworkSync(mock.MagicMock(), mock.MagicMock())
 
 
 class TestNetworkSync:

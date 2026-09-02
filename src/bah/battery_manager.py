@@ -4,7 +4,7 @@ BAH battery charge management module
 import logging
 import re
 import subprocess
-from bah.display_controller import DisplayController
+from display_controller import SSD1306
 from bah.task_scheduler import TaskScheduler, Task
 
 from bah.exceptions import BAHException
@@ -18,7 +18,7 @@ class BatteryManager(TaskScheduler):
     Class implementing battery charge management and reporting
     """
 
-    def __init__(self, display_controller: DisplayController):
+    def __init__(self, display_controller: SSD1306):
         super().__init__()
         self._display_controller = display_controller
         self._current_battery_charge = 0
@@ -85,9 +85,10 @@ class BatteryManager(TaskScheduler):
         """
         logger.info('Setting battery charge to: %d', battery_charge)
         self._current_battery_charge = battery_charge
-        self._display_controller.battery_charge = battery_charge
-        if not self._display_controller.is_battery_flashing():
-            self._display_controller.draw_battery()
+        self._display_controller.set_battery_charge(battery_charge)
+        self._display_controller.update()
+        # if not self._display_controller.is_battery_flashing():
+        #     self._display_controller.draw_battery()
 
     def set_battery_charging(self, charging: bool) -> None:
         """
@@ -98,6 +99,7 @@ class BatteryManager(TaskScheduler):
         """
         logger.debug('Setting battery charging to: %d', charging)
         self._display_controller.set_battery_charging(charging)
+        self._display_controller.update()
 
     def set_unknown(self, _error: BAHException) -> None:
         """
@@ -107,4 +109,4 @@ class BatteryManager(TaskScheduler):
         :return:
         """
         logger.info('Setting battery charge to: unknown')
-        self._display_controller.draw_battery_unknown()
+        # self._display_controller.draw_battery_unknown()

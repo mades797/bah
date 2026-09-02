@@ -8,8 +8,9 @@ import re
 import shutil
 import subprocess
 
+from display_controller import SSD1306
+
 from bah.audio_controller import AudioController, Media
-from bah.display_controller import DisplayController
 from bah.exceptions import BAHException
 from bah.task_scheduler import TaskScheduler, Task
 
@@ -38,7 +39,7 @@ class NetworkSync(TaskScheduler):
         """
         return self._audio_controller.media_files
 
-    def __init__(self, display_controller: DisplayController, audio_controller: AudioController) -> None:
+    def __init__(self, display_controller: SSD1306, audio_controller: AudioController) -> None:
         super().__init__()
         self._display_controller = display_controller
         self._audio_controller = audio_controller
@@ -67,14 +68,14 @@ class NetworkSync(TaskScheduler):
             if not os.path.isfile(os.path.join(self._audio_controller.local_data_dir, media.filename)):
                 files_to_copy.append(media.filename)
         if files_to_copy:
-            self._display_controller.start_download_flash()
+            # self._display_controller.start_download_flash()
             for file in files_to_copy:
                 shutil.copy(
                     os.path.join(self.remote_data_dir, file),
                     os.path.join(self._audio_controller.local_data_dir, file)
                 )
             shutil.copy(self.remote_data_file, self._audio_controller.local_data_file)
-            self._display_controller.stop_download_flash()
+            # self._display_controller.stop_download_flash()
         self._audio_controller.media_list = new_media_list
 
     def handle_remote_media_list(self, remote_media_list: dict[str, list]) -> None:
@@ -107,13 +108,11 @@ class NetworkSync(TaskScheduler):
         except OSError as error:
             if (
                 error.errno == 2 and
-                error.strerror == 'No such file or directory' and
-                error.filename == self.remote_data_file
+                error.strerror == 'No such file or directory'
             ) or (
                 error.errno == 19 and
-                error.strerror == 'No such device' and
-                error.filename == self.remote_data_file
-            ):
+                error.strerror == 'No such device'
+            ) and error.filename == self.remote_data_file:
                 logging.warning('Failed to read remote media file: %s. Is the remote drive mounted?', error.filename)
             else:
                 raise
@@ -126,13 +125,9 @@ class NetworkSync(TaskScheduler):
         :return:
         """
         logging.debug('Setting network indicator. Connected: %s', connected)
-        if connected != self._connected:
-            self._display_controller.erase_network()
-        if connected:
-            self._display_controller.draw_network()
-        else:
-            self._display_controller.draw_no_network()
+        self._display_controller.set_network_off(not connected)
         self._connected = connected
+        self._display_controller.update()
 
     @classmethod
     def is_connected(cls) -> bool:

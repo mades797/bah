@@ -13,7 +13,7 @@ import subprocess
 import gpiozero
 import vlc
 
-from bah.display_controller import DisplayController
+from display_controller import SSD1306
 from bah.exceptions import BAHException
 
 logger = logging.getLogger('bah-audio-controller')
@@ -71,8 +71,8 @@ class AudioController:
     local_data_dir = '/data'
     local_data_file = os.path.join(local_data_dir, 'media.json')
 
-    def __init__(self, display_controller: DisplayController = None):
-        self._display_controller = display_controller or DisplayController()
+    def __init__(self, display_controller: SSD1306 = None):
+        self._display_controller = display_controller or SSD1306()
         self._media_list: list[Media] = []
         self._current_media_index = 0
         self._current_state = AudioControllerState.IDLE
@@ -183,22 +183,25 @@ class AudioController:
         return self._current_state == AudioControllerState.PLAYING
 
     def _display_current_media(self) -> None:
-        self._display_controller.write_main(f'{self._current_media_index + 1}: {self.current_media.title}')
+        self._display_controller.set_main_text(f'{self._current_media_index + 1}: {self.current_media.title}')
+        self._display_controller.update()
 
     def _transition_to_playing(self) -> None:
         self._current_state = AudioControllerState.PLAYING
-        self._display_controller.write_top_banner('Lecture')
+        self._display_controller.set_top_text('Lecture')
         self._display_current_media()
 
     def _transition_to_pause(self) -> None:
         self._current_state = AudioControllerState.PAUSED
-        self._display_controller.write_top_banner('Pause')
+        self._display_controller.set_top_text('Pause')
+        self._display_controller.update()
 
     def _transition_to_idle(self) -> None:
         self._current_state = AudioControllerState.IDLE
 
     def _play_current_index(self) -> None:
-        self._display_controller.write_main(self.media_list[self._current_media_index].title)
+        self._display_controller.set_main_text(self.media_list[self._current_media_index].title)
+        self._display_controller.update()
 
     def _increment_media_index(self) -> None:
         if self._current_media_index >= len(self.media_list) - 1:
@@ -394,4 +397,5 @@ class AudioController:
         self._display_volume()
 
     def _display_volume(self) -> None:
-        self._display_controller.write_top_banner(f'Volume: {self.current_volume}')
+        self._display_controller.set_top_text(f'Volume: {self.current_volume}')
+        self._display_controller.update()
