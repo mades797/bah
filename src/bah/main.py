@@ -35,11 +35,11 @@ def main() -> None:
         try:
             # If a failure occurs beyond this point, we can display an error on the display
             audio_controller = AudioController(display_controller)
-            button_1.when_pressed = audio_controller.handle_play_button
-            button_2.when_pressed = audio_controller.handle_next_button
-            button_3.when_pressed = audio_controller.handle_back_button
-            button_4.when_pressed = audio_controller.handle_up_button
-            button_5.when_pressed = audio_controller.handle_down_button
+            button_1.when_released = audio_controller.handle_play_button
+            button_2.when_released = audio_controller.handle_next_button
+            button_3.when_released = audio_controller.handle_back_button
+            button_4.when_released = audio_controller.handle_up_button
+            button_5.when_released = audio_controller.handle_down_button
             audio_controller.register_headphone_button(headphone)
             network_sync = NetworkSync(display_controller, audio_controller)
             network_sync.run_async()
